@@ -1,0 +1,1529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fleet GPS Analytics</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #12151c;
+    --surface2: #1a1e28;
+    --border: #252a38;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #a78bfa;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--muted); }
+
+  .header-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  /* DROP ZONE */
+  #drop-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 61px);
+    padding: 40px;
+  }
+
+  .drop-area {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 80px 60px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    max-width: 640px;
+    width: 100%;
+    position: relative;
+    background: var(--surface);
+  }
+
+  .drop-area.dragover {
+    border-color: var(--accent);
+    background: rgba(0,229,255,0.04);
+    transform: scale(1.01);
+  }
+
+  .drop-area input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+
+  .drop-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+    display: block;
+  }
+
+  .drop-title {
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--accent);
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+  }
+
+  .drop-sub {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .drop-badges {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .badge.active { border-color: var(--accent); color: var(--accent); }
+
+  /* DASHBOARD */
+  #dashboard { display: none; }
+
+  .dash-header {
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .dash-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .dash-period {
+    font-size: 14px;
+    color: var(--text);
+    margin-top: 4px;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); }
+
+  /* STAT CARDS */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-card {
+    background: var(--surface);
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-color, var(--accent));
+    opacity: 0.6;
+  }
+
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-value span {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* MAIN LAYOUT */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    height: calc(100vh - 61px - 69px - 100px);
+    min-height: 500px;
+  }
+
+  /* VEHICLE LIST */
+  .vehicle-panel {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 10;
+  }
+
+  .vehicle-count {
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+
+  .vehicle-search {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 41px;
+    background: var(--surface);
+    z-index: 10;
+  }
+
+  .vehicle-search input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .vehicle-search input:focus { border-color: var(--accent); }
+  .vehicle-search input::placeholder { color: var(--muted); }
+
+  .vehicle-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .vehicle-item:hover { background: var(--surface2); }
+
+  .vehicle-item.active {
+    background: rgba(0,229,255,0.05);
+    border-left: 2px solid var(--accent);
+  }
+
+  .vehicle-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .vehicle-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+
+  .vehicle-tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--surface2);
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  .vehicle-tag.green { background: rgba(34,197,94,0.1); color: var(--green); }
+  .vehicle-tag.red { background: rgba(239,68,68,0.1); color: var(--red); }
+  .vehicle-tag.yellow { background: rgba(245,158,11,0.1); color: var(--yellow); }
+  .vehicle-tag.blue { background: rgba(0,229,255,0.1); color: var(--accent); }
+
+  .vehicle-dist {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--accent);
+    float: right;
+  }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  /* MAP */
+  #map {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  .leaflet-container {
+    background: #0d1117 !important;
+  }
+
+  /* MAP CONTROLS */
+  .map-controls {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .map-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  .map-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .map-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,0.08); }
+
+  /* BOTTOM ANALYTICS */
+  .analytics-bar {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1px;
+    background-color: var(--border);
+  }
+
+  .analytics-cell {
+    background: var(--surface);
+    padding: 14px 20px;
+  }
+
+  .analytics-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .bar-chart {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    height: 40px;
+  }
+
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .bar-fill {
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.4s ease;
+    min-height: 2px;
+  }
+
+  .bar-label {
+    font-family: var(--mono);
+    font-size: 8px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* VEHICLE DETAIL TOOLTIP */
+  .vehicle-detail {
+    position: absolute;
+    bottom: 0; left: 340px; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+    display: none;
+    z-index: 600;
+    animation: slideUp 0.2s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .vehicle-detail.show { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+
+  .detail-group { flex: 1; min-width: 140px; }
+
+  .detail-title {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 3px 0;
+    color: var(--muted);
+  }
+
+  .detail-row span:last-child { color: var(--text); font-family: var(--mono); font-size: 11px; }
+
+  /* VEHICLE MARKER */
+  .vehicle-marker {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: transform 0.2s;
+    box-shadow: 0 0 12px rgba(0,229,255,0.4);
+  }
+
+  /* LOADING */
+  .loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,12,16,0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    flex-direction: column;
+    gap: 16px;
+    display: none;
+  }
+
+  .loading-overlay.show { display: flex; }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  /* ANIMATION CONTROLS */
+  .anim-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    display: flex;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    align-items: center;
+  }
+
+  .anim-btn {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .anim-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .anim-btn.playing { border-color: var(--accent); background: rgba(0,229,255,0.1); }
+
+  .anim-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    min-width: 80px;
+    text-align: center;
+  }
+
+  .speed-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  /* STATUS INDICATORS */
+  .status-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  .status-dot.running { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.stopped { background: var(--red); }
+  .status-dot.idle { background: var(--yellow); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* EMPTY STATE */
+  .empty-map {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .empty-map-icon { font-size: 40px; opacity: 0.3; }
+  .empty-map-text { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; letter-spacing: 1px; }
+
+  /* LEGEND */
+  .map-legend {
+    position: absolute;
+    bottom: 80px;
+    right: 12px;
+    z-index: 500;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 2;
+  }
+
+  .legend-row { display: flex; align-items: center; gap: 8px; }
+  .legend-line { width: 20px; height: 2px; border-radius: 1px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    background: var(--surface);
+    gap: 0;
+  }
+
+  .tab {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 10px 16px;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* FLEET SUMMARY TABLE */
+  .fleet-table-wrap {
+    overflow-x: auto;
+    padding: 20px;
+  }
+
+  .fleet-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .fleet-table th {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .fleet-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(37,42,56,0.5);
+    color: var(--text);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .fleet-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .fleet-table td:first-child { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+
+  .mini-bar {
+    display: inline-block;
+    height: 6px;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+
+  @media (max-width: 768px) {
+    .main-layout { grid-template-columns: 1fr; }
+    .vehicle-panel { max-height: 300px; }
+    header { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">PROCESSING FLEET DATA</div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">FLEET<span>/</span>GPS <span>// ANALYTICS</span></div>
+  <div class="header-meta" id="header-meta">Drop CSV files to begin</div>
+</header>
+
+<!-- DROP SCREEN -->
+<div id="drop-screen">
+  <div class="drop-area" id="drop-area">
+    <input type="file" id="file-input" multiple accept=".csv">
+    <span class="drop-icon">📡</span>
+    <div class="drop-title">DROP FLEET CSV FILES</div>
+    <div class="drop-sub">
+      Supports Trip Summary &amp; Travel Summary exports<br>
+      Drag &amp; drop one or more CSV files here
+    </div>
+    <div class="drop-badges">
+      <span class="badge active">TRIP SUMMARY</span>
+      <span class="badge active">TRAVEL SUMMARY</span>
+      <span class="badge">MULTI-VEHICLE</span>
+      <span class="badge">GPS TRACKING</span>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+
+  <!-- DASH HEADER -->
+  <div class="dash-header">
+    <div>
+      <div class="dash-title">Fleet Analytics Dashboard</div>
+      <div class="dash-period" id="dash-period">—</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="resetApp()">↩ New Files</button>
+      <button class="btn primary" id="animate-all-btn" onclick="toggleAllAnimation()">▶ Animate All</button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <!-- TABS + MAIN -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('map', this)">MAP VIEW</div>
+    <div class="tab" onclick="switchTab('table', this)">FLEET TABLE</div>
+  </div>
+
+  <!-- MAP TAB -->
+  <div id="tab-map" class="main-layout">
+    <!-- VEHICLE LIST -->
+    <div class="vehicle-panel">
+      <div class="panel-header">
+        Vehicles
+        <span class="vehicle-count" id="veh-count">0</span>
+      </div>
+      <div class="vehicle-search">
+        <input type="text" id="search-input" placeholder="Search vehicle..." oninput="filterVehicles(this.value)">
+      </div>
+      <div id="vehicle-list"></div>
+    </div>
+
+    <!-- MAP CONTAINER -->
+    <div style="position:relative;flex:1">
+      <div id="map"></div>
+
+      <!-- MAP CONTROLS -->
+      <div class="map-controls">
+        <button class="map-btn active" id="btn-routes" onclick="toggleLayer('routes', this)">⟶ Routes</button>
+        <button class="map-btn active" id="btn-markers" onclick="toggleLayer('markers', this)">◉ Markers</button>
+        <button class="map-btn" onclick="fitAll()">⊡ Fit All</button>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="map-legend" id="map-legend" style="display:none">
+        <div class="legend-row"><div class="legend-dot" style="background:var(--green)"></div> Start</div>
+        <div class="legend-row"><div class="legend-dot" style="background:var(--red)"></div> End</div>
+        <div class="legend-row"><div class="legend-line" style="background:var(--accent)"></div> Route</div>
+        <div class="legend-row"><div class="legend-dot" style="background:var(--accent);animation:pulse 1s infinite"></div> Vehicle</div>
+      </div>
+
+      <!-- ANIMATION CONTROLS -->
+      <div class="anim-controls" id="anim-controls" style="display:none">
+        <button class="anim-btn" onclick="stepBack()">⏮</button>
+        <button class="anim-btn" id="play-btn" onclick="togglePlay()">▶</button>
+        <button class="anim-btn" onclick="stepForward()">⏭</button>
+        <div class="anim-label" id="anim-label">SELECT VEHICLE</div>
+        <select class="speed-select" id="speed-select" onchange="setSpeed(this.value)">
+          <option value="1">1x</option>
+          <option value="2" selected>2x</option>
+          <option value="4">4x</option>
+          <option value="8">8x</option>
+        </select>
+      </div>
+
+      <!-- EMPTY STATE -->
+      <div class="empty-map" id="empty-map">
+        <div class="empty-map-icon">🗺</div>
+        <div class="empty-map-text">SELECT A VEHICLE TO ANIMATE</div>
+      </div>
+
+      <!-- VEHICLE DETAIL -->
+      <div class="vehicle-detail" id="vehicle-detail"></div>
+    </div>
+  </div>
+
+  <!-- TABLE TAB -->
+  <div id="tab-table" style="display:none; overflow:auto; max-height: calc(100vh - 250px)">
+    <div class="fleet-table-wrap">
+      <table class="fleet-table" id="fleet-table"></table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── STATE ──────────────────────────────────────────────────────────────────
+let vehicles = [];
+let map;
+let markers = { routes: [], starts: [], ends: [], anim: null };
+let layerVisible = { routes: true, markers: true };
+let selectedVehicle = null;
+let animState = { playing: false, progress: 0, animFrame: null, speed: 2 };
+let routeCache = {};
+const COLORS = [
+  '#00e5ff','#ff6b35','#a78bfa','#22c55e','#f59e0b','#ec4899',
+  '#06b6d4','#84cc16','#f97316','#8b5cf6','#14b8a6','#fb923c',
+  '#e879f9','#34d399','#fbbf24','#60a5fa','#f472b6','#4ade80',
+  '#38bdf8','#c084fc'
+];
+
+// ─── CSV PARSING ─────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  // Detect type
+  const firstLine = lines[0] || '';
+  const isTravel = firstLine.includes('Travel Summary');
+  const isTrip = firstLine.includes('Trip Summary');
+
+  // Find the data header row (has "Company" and "Object")
+  let headerIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes('"Company"') && lines[i].includes('"Object"')) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx === -1) return { vehicles: [], period: '', type: 'unknown' };
+
+  // Extract period
+  let period = '';
+  for (let i = 0; i < headerIdx; i++) {
+    if (lines[i].includes('Duration')) {
+      period = lines[i].replace(/["]/g, '').replace('Duration:', '').trim();
+      break;
+    }
+  }
+
+  // Parse with PapaParse from headerIdx
+  const dataLines = lines.slice(headerIdx).join('\n');
+  const result = Papa.parse(dataLines, { header: true, skipEmptyLines: true });
+
+  return { rows: result.data, period, type: isTravel ? 'travel' : 'trip' };
+}
+
+function normalizeVehicle(row, type, color) {
+  const clean = v => (v || '').replace(/['"]/g, '').trim();
+
+  const parseTime = s => {
+    const parts = clean(s).split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  };
+
+  const formatTime = s => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+
+  const obj = clean(row['Object'] || row['object'] || '');
+  const dist = parseFloat(clean(row['Distance'] || '0')) || 0;
+  const running = parseTime(row['Running'] || row['Running (HH:MM:SS)'] || '');
+  const idle = parseTime(row['Idle'] || row['Idle (HH:MM:SS)'] || '');
+  const stop = parseTime(row['Stop'] || row['Stop (HH:MM:SS)'] || '');
+  const trips = parseInt(clean(row['No of Trip'] || '0')) || 0;
+  const avgSpeed = parseInt(clean(row['AVG'] || '0')) || 0;
+  const maxSpeed = parseInt(clean(row['MAX'] || '0')) || 0;
+  const overspeed = parseInt(clean(row['Over Speed'] || row['Over speed'] || '0')) || 0;
+  const alerts = parseInt(clean(row['Alert(s)'] || row['Alert(s)'] || '0')) || 0;
+  const driver = clean(row['Driver'] || 'Unknown');
+  const brand = clean(row['Object Brand'] || '');
+  const model = clean(row['Object Model'] || '');
+  const imei = clean(row['IMEI No'] || '');
+  const workDays = parseInt(clean(row['Working Days'] || '0')) || 0;
+
+  let startLoc = clean(row['Start Location'] || row['First Ignition ON Location'] || '');
+  let endLoc = clean(row['End Location'] || row['Last Ignition Off location'] || row['Last Ignition Off Location'] || '');
+
+  const total = running + idle + stop;
+  const runPct = total > 0 ? Math.round(running / total * 100) : 0;
+  const idlePct = total > 0 ? Math.round(idle / total * 100) : 0;
+  const stopPct = total > 0 ? Math.round(stop / total * 100) : 0;
+
+  return {
+    id: imei || obj,
+    name: obj,
+    driver,
+    brand, model, imei,
+    dist, running, idle, stop,
+    runningFmt: formatTime(running),
+    idleFmt: formatTime(idle),
+    stopFmt: formatTime(stop),
+    trips, avgSpeed, maxSpeed, overspeed, alerts, workDays,
+    runPct, idlePct, stopPct,
+    startLoc, endLoc,
+    startCoords: null, endCoords: null,
+    color,
+    type
+  };
+}
+
+// ─── GEOCODING (Nominatim) ────────────────────────────────────────────────────
+async function geocodeAddress(addr) {
+  if (!addr) return null;
+  // Clean up the address — remove direction tags like (NE), (SW), etc.
+  const clean = addr.replace(/\s*\([NESW]+\)\s*$/, '').trim();
+  // Try progressively shorter versions
+  const parts = clean.split(',').map(s => s.trim());
+  for (let i = 0; i < Math.min(4, parts.length); i++) {
+    const query = parts.slice(i).join(', ');
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`, {
+        headers: { 'Accept-Language': 'en' }
+      });
+      const data = await res.json();
+      if (data && data[0]) {
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+    } catch {}
+    await sleep(300);
+  }
+  return null;
+}
+
+// ─── ROUTING (OSRM) ──────────────────────────────────────────────────────────
+async function getRoute(start, end) {
+  const key = `${start.lat},${start.lng}_${end.lat},${end.lng}`;
+  if (routeCache[key]) return routeCache[key];
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.routes && data.routes[0]) {
+      const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+      routeCache[key] = coords;
+      return coords;
+    }
+  } catch {}
+  // Fallback: straight line
+  return interpolateLine(start, end, 50);
+}
+
+function interpolateLine(start, end, steps) {
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    pts.push([
+      start.lat + (end.lat - start.lat) * t,
+      start.lng + (end.lng - start.lng) * t
+    ]);
+  }
+  return pts;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── MAP INIT ─────────────────────────────────────────────────────────────────
+function initMap() {
+  if (map) return;
+  map = L.map('map', { zoomControl: false }).setView([27.7, 85.3], 12);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© CartoDB',
+    maxZoom: 19
+  }).addTo(map);
+}
+
+// ─── RENDER VEHICLES ──────────────────────────────────────────────────────────
+function renderVehicleList(filter = '') {
+  const list = document.getElementById('vehicle-list');
+  const maxDist = Math.max(...vehicles.map(v => v.dist), 1);
+  list.innerHTML = '';
+  const filtered = vehicles.filter(v =>
+    v.name.toLowerCase().includes(filter.toLowerCase()) ||
+    v.driver.toLowerCase().includes(filter.toLowerCase())
+  );
+  document.getElementById('veh-count').textContent = filtered.length;
+
+  filtered.forEach(v => {
+    const div = document.createElement('div');
+    div.className = 'vehicle-item' + (selectedVehicle?.id === v.id ? ' active' : '');
+    div.onclick = () => selectVehicle(v);
+
+    const statusColor = v.runPct > 50 ? 'green' : v.stopPct > 70 ? 'red' : 'yellow';
+
+    div.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div>
+          <div class="vehicle-name">
+            <span style="color:${v.color};margin-right:6px">●</span>${v.name}
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.model || v.brand || 'Vehicle'}</div>
+        </div>
+        <div class="vehicle-dist">${v.dist.toFixed(1)}<span style="font-size:10px;color:var(--muted)"> km</span></div>
+      </div>
+      <div class="vehicle-meta">
+        <span class="vehicle-tag ${statusColor}"><span class="status-dot ${v.runPct > 30 ? 'running' : 'stopped'}"></span>${v.runPct}% run</span>
+        ${v.overspeed > 0 ? `<span class="vehicle-tag red">⚡ ${v.overspeed} overspd</span>` : ''}
+        ${v.trips > 0 ? `<span class="vehicle-tag blue">${v.trips} trips</span>` : ''}
+        <span class="vehicle-tag">${v.workDays}d</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${(v.dist/maxDist*100).toFixed(1)}%;background:${v.color}"></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function filterVehicles(val) {
+  renderVehicleList(val);
+}
+
+// ─── SELECT VEHICLE ──────────────────────────────────────────────────────────
+async function selectVehicle(v) {
+  selectedVehicle = v;
+  renderVehicleList(document.getElementById('search-input').value);
+  showVehicleDetail(v);
+  stopAnimation();
+
+  // Geocode if needed
+  if (!v.startCoords && v.startLoc) {
+    document.getElementById('loading').classList.add('show');
+    v.startCoords = await geocodeAddress(v.startLoc);
+    await sleep(400);
+    if (!v.endCoords && v.endLoc) {
+      v.endCoords = await geocodeAddress(v.endLoc);
+    }
+    document.getElementById('loading').classList.remove('show');
+  }
+
+  clearAnimLayer();
+  document.getElementById('empty-map').style.display = 'none';
+  document.getElementById('anim-controls').style.display = 'flex';
+  document.getElementById('map-legend').style.display = 'block';
+
+  if (v.startCoords && v.endCoords) {
+    // Add start/end markers
+    addStartEndMarkers(v);
+    // Fit map
+    const bounds = L.latLngBounds([v.startCoords, v.endCoords]);
+    map.fitBounds(bounds, { padding: [60, 60] });
+    // Fetch route
+    document.getElementById('loading').classList.add('show');
+    v.routePoints = await getRoute(v.startCoords, v.endCoords);
+    document.getElementById('loading').classList.remove('show');
+    // Draw static route
+    drawStaticRoute(v);
+    document.getElementById('anim-label').textContent = 'READY';
+  } else {
+    document.getElementById('anim-label').textContent = 'NO GPS DATA';
+  }
+}
+
+function showVehicleDetail(v) {
+  const el = document.getElementById('vehicle-detail');
+  el.className = 'vehicle-detail show';
+  el.innerHTML = `
+    <div class="detail-group">
+      <div class="detail-title">Vehicle</div>
+      <div class="detail-row"><span>Object</span><span>${v.name}</span></div>
+      <div class="detail-row"><span>Brand/Model</span><span>${v.brand} ${v.model}</span></div>
+      <div class="detail-row"><span>Driver</span><span>${v.driver}</span></div>
+    </div>
+    <div class="detail-group">
+      <div class="detail-title">Distance & Speed</div>
+      <div class="detail-row"><span>Distance</span><span>${v.dist.toFixed(2)} km</span></div>
+      <div class="detail-row"><span>Avg Speed</span><span>${v.avgSpeed} km/h</span></div>
+      <div class="detail-row"><span>Max Speed</span><span>${v.maxSpeed} km/h</span></div>
+    </div>
+    <div class="detail-group">
+      <div class="detail-title">Time Breakdown</div>
+      <div class="detail-row"><span>Running</span><span>${v.runningFmt} (${v.runPct}%)</span></div>
+      <div class="detail-row"><span>Idle</span><span>${v.idleFmt} (${v.idlePct}%)</span></div>
+      <div class="detail-row"><span>Stopped</span><span>${v.stopFmt} (${v.stopPct}%)</span></div>
+    </div>
+    <div class="detail-group">
+      <div class="detail-title">Alerts</div>
+      <div class="detail-row"><span>Overspeed</span><span style="color:${v.overspeed > 0 ? 'var(--red)' : 'var(--green)'}">${v.overspeed}</span></div>
+      <div class="detail-row"><span>Alerts</span><span style="color:${v.alerts > 0 ? 'var(--yellow)' : 'var(--green)'}">${v.alerts}</span></div>
+      <div class="detail-row"><span>Trips</span><span>${v.trips}</span></div>
+    </div>
+    <div class="detail-group" style="flex:2;min-width:200px">
+      <div class="detail-title">Locations</div>
+      <div class="detail-row" style="flex-direction:column;gap:2px">
+        <span>🟢 ${v.startLoc || 'Unknown'}</span>
+      </div>
+      <div class="detail-row" style="flex-direction:column;gap:2px;margin-top:6px">
+        <span>🔴 ${v.endLoc || 'Unknown'}</span>
+      </div>
+    </div>
+  `;
+}
+
+// ─── MAP LAYERS ───────────────────────────────────────────────────────────────
+function addStartEndMarkers(v) {
+  if (markers.starts) markers.starts.forEach(m => map.removeLayer(m));
+  if (markers.ends) markers.ends.forEach(m => map.removeLayer(m));
+  markers.starts = [];
+  markers.ends = [];
+
+  if (v.startCoords) {
+    const m = L.circleMarker([v.startCoords.lat, v.startCoords.lng], {
+      radius: 8, fillColor: '#22c55e', color: '#fff', weight: 2,
+      fillOpacity: 1
+    }).bindTooltip(`<b>START</b><br>${v.name}<br>${v.startLoc}`, { className: 'dark-tip' });
+    m.addTo(map);
+    markers.starts.push(m);
+  }
+  if (v.endCoords) {
+    const m = L.circleMarker([v.endCoords.lat, v.endCoords.lng], {
+      radius: 8, fillColor: '#ef4444', color: '#fff', weight: 2,
+      fillOpacity: 1
+    }).bindTooltip(`<b>END</b><br>${v.name}<br>${v.endLoc}`, { className: 'dark-tip' });
+    m.addTo(map);
+    markers.ends.push(m);
+  }
+}
+
+function drawStaticRoute(v) {
+  if (markers.routeLine) map.removeLayer(markers.routeLine);
+  if (!v.routePoints) return;
+  markers.routeLine = L.polyline(v.routePoints, {
+    color: v.color, weight: 3, opacity: 0.4, dashArray: '8,6'
+  }).addTo(map);
+}
+
+function clearAnimLayer() {
+  if (markers.animLine) { map.removeLayer(markers.animLine); markers.animLine = null; }
+  if (markers.animMarker) { map.removeLayer(markers.animMarker); markers.animMarker = null; }
+  if (markers.routeLine) { map.removeLayer(markers.routeLine); markers.routeLine = null; }
+  if (markers.starts) markers.starts.forEach(m => map.removeLayer(m));
+  if (markers.ends) markers.ends.forEach(m => map.removeLayer(m));
+  markers.starts = []; markers.ends = [];
+}
+
+function toggleLayer(layer, btn) {
+  layerVisible[layer] = !layerVisible[layer];
+  btn.classList.toggle('active', layerVisible[layer]);
+  // Apply to all route lines
+  markers.routes.forEach(m => {
+    if (layer === 'routes') {
+      layerVisible.routes ? map.addLayer(m) : map.removeLayer(m);
+    }
+  });
+}
+
+function fitAll() {
+  const coords = vehicles
+    .filter(v => v.startCoords || v.endCoords)
+    .flatMap(v => [v.startCoords, v.endCoords].filter(Boolean).map(c => [c.lat, c.lng]));
+  if (coords.length) map.fitBounds(L.latLngBounds(coords), { padding: [40, 40] });
+}
+
+// ─── ANIMATION ────────────────────────────────────────────────────────────────
+function togglePlay() {
+  if (!selectedVehicle || !selectedVehicle.routePoints) return;
+  animState.playing ? stopAnimation() : startAnimation();
+}
+
+function startAnimation() {
+  if (!selectedVehicle?.routePoints) return;
+  const v = selectedVehicle;
+  animState.playing = true;
+  document.getElementById('play-btn').textContent = '⏸';
+  document.getElementById('play-btn').classList.add('playing');
+  document.getElementById('anim-label').textContent = 'ANIMATING';
+
+  if (markers.animLine) map.removeLayer(markers.animLine);
+  if (markers.animMarker) map.removeLayer(markers.animMarker);
+
+  markers.animLine = L.polyline([], {
+    color: v.color, weight: 4, opacity: 0.9
+  }).addTo(map);
+
+  const icon = L.divIcon({
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${v.color};border:2px solid white;box-shadow:0 0 10px ${v.color}"></div>`,
+    iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+  });
+  markers.animMarker = L.marker(v.routePoints[0], { icon, zIndexOffset: 1000 }).addTo(map);
+
+  const pts = v.routePoints;
+  const totalPts = pts.length;
+  let idx = Math.floor(animState.progress * totalPts);
+  const drawnPts = pts.slice(0, idx);
+  markers.animLine.setLatLngs(drawnPts);
+
+  const STEP_INTERVAL = 30;
+  const stepsPerFrame = Math.max(1, Math.floor(animState.speed));
+
+  function step() {
+    if (!animState.playing) return;
+    idx = Math.min(idx + stepsPerFrame, totalPts - 1);
+    animState.progress = idx / (totalPts - 1);
+    markers.animMarker.setLatLng(pts[idx]);
+    markers.animLine.addLatLng(pts[idx]);
+
+    const pct = Math.round(animState.progress * 100);
+    document.getElementById('anim-label').textContent = `${pct}%`;
+
+    if (idx < totalPts - 1) {
+      animState.animFrame = setTimeout(step, STEP_INTERVAL);
+    } else {
+      stopAnimation(true);
+    }
+  }
+  step();
+}
+
+function stopAnimation(finished = false) {
+  animState.playing = false;
+  if (animState.animFrame) { clearTimeout(animState.animFrame); animState.animFrame = null; }
+  document.getElementById('play-btn').textContent = '▶';
+  document.getElementById('play-btn').classList.remove('playing');
+  if (finished) {
+    animState.progress = 0;
+    document.getElementById('anim-label').textContent = 'DONE';
+  }
+}
+
+function stepBack() {
+  stopAnimation();
+  animState.progress = Math.max(0, animState.progress - 0.1);
+  if (selectedVehicle?.routePoints) {
+    const pts = selectedVehicle.routePoints;
+    const idx = Math.floor(animState.progress * (pts.length - 1));
+    if (markers.animMarker) markers.animMarker.setLatLng(pts[idx]);
+    if (markers.animLine) markers.animLine.setLatLngs(pts.slice(0, idx));
+  }
+}
+
+function stepForward() {
+  stopAnimation();
+  animState.progress = Math.min(1, animState.progress + 0.1);
+  if (selectedVehicle?.routePoints) {
+    const pts = selectedVehicle.routePoints;
+    const idx = Math.floor(animState.progress * (pts.length - 1));
+    if (markers.animMarker) markers.animMarker.setLatLng(pts[idx]);
+    if (markers.animLine) markers.animLine.setLatLngs(pts.slice(0, idx));
+  }
+}
+
+function setSpeed(v) { animState.speed = parseFloat(v); }
+
+async function toggleAllAnimation() {
+  // Geocode all vehicles and show all routes on map
+  document.getElementById('loading').classList.add('show');
+  clearAllMapLayers();
+
+  for (const v of vehicles) {
+    if (!v.startCoords && v.startLoc) {
+      v.startCoords = await geocodeAddress(v.startLoc);
+      await sleep(300);
+    }
+    if (!v.endCoords && v.endLoc) {
+      v.endCoords = await geocodeAddress(v.endLoc);
+      await sleep(300);
+    }
+  }
+
+  // Fetch all routes
+  for (const v of vehicles) {
+    if (v.startCoords && v.endCoords && !v.routePoints) {
+      v.routePoints = await getRoute(v.startCoords, v.endCoords);
+      await sleep(200);
+    }
+  }
+
+  document.getElementById('loading').classList.remove('show');
+
+  // Draw all routes
+  const bounds = [];
+  vehicles.forEach(v => {
+    if (v.startCoords) {
+      bounds.push([v.startCoords.lat, v.startCoords.lng]);
+      L.circleMarker([v.startCoords.lat, v.startCoords.lng], {
+        radius: 6, fillColor: '#22c55e', color: v.color, weight: 2, fillOpacity: 0.9
+      }).bindTooltip(`<b>START</b>: ${v.name}`).addTo(map);
+    }
+    if (v.endCoords) {
+      bounds.push([v.endCoords.lat, v.endCoords.lng]);
+      L.circleMarker([v.endCoords.lat, v.endCoords.lng], {
+        radius: 6, fillColor: '#ef4444', color: v.color, weight: 2, fillOpacity: 0.9
+      }).bindTooltip(`<b>END</b>: ${v.name}`).addTo(map);
+    }
+    if (v.routePoints) {
+      const line = L.polyline(v.routePoints, {
+        color: v.color, weight: 3, opacity: 0.6
+      }).bindTooltip(v.name).addTo(map);
+      markers.routes.push(line);
+    }
+  });
+
+  if (bounds.length) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] });
+  document.getElementById('map-legend').style.display = 'block';
+  document.getElementById('anim-controls').style.display = 'none';
+  document.getElementById('empty-map').style.display = 'none';
+}
+
+function clearAllMapLayers() {
+  markers.routes.forEach(m => map.removeLayer(m));
+  markers.routes = [];
+  clearAnimLayer();
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function renderStats() {
+  const totalDist = vehicles.reduce((a, v) => a + v.dist, 0);
+  const totalTrips = vehicles.reduce((a, v) => a + v.trips, 0);
+  const totalOverspeed = vehicles.reduce((a, v) => a + v.overspeed, 0);
+  const avgSpeed = vehicles.filter(v => v.avgSpeed).reduce((a, v) => a + v.avgSpeed, 0) / (vehicles.filter(v => v.avgSpeed).length || 1);
+  const totalAlerts = vehicles.reduce((a, v) => a + v.alerts, 0);
+  const avgRunPct = vehicles.reduce((a, v) => a + v.runPct, 0) / (vehicles.length || 1);
+
+  const stats = [
+    { label: 'Total Vehicles', value: vehicles.length, sub: 'in fleet', color: 'var(--accent)' },
+    { label: 'Total Distance', value: totalDist.toFixed(1), unit: 'km', sub: `${(totalDist / vehicles.length).toFixed(1)} avg/vehicle`, color: 'var(--accent2)' },
+    { label: 'Total Trips', value: totalTrips, sub: `${(totalTrips / vehicles.length).toFixed(1)} avg/vehicle`, color: 'var(--accent3)' },
+    { label: 'Avg Run Rate', value: avgRunPct.toFixed(0), unit: '%', sub: 'vehicle utilization', color: 'var(--green)' },
+    { label: 'Avg Speed', value: avgSpeed.toFixed(0), unit: 'km/h', sub: 'fleet average', color: 'var(--yellow)' },
+    { label: 'Overspeed Events', value: totalOverspeed, sub: totalOverspeed > 0 ? 'requires attention' : 'all clear', color: totalOverspeed > 0 ? 'var(--red)' : 'var(--green)' },
+    { label: 'Total Alerts', value: totalAlerts, sub: totalAlerts > 0 ? 'review needed' : 'all clear', color: totalAlerts > 0 ? 'var(--yellow)' : 'var(--green)' },
+  ];
+
+  document.getElementById('stats-grid').innerHTML = stats.map(s => `
+    <div class="stat-card" style="--accent-color:${s.color}">
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-value">${s.value}${s.unit ? `<span>${s.unit}</span>` : ''}</div>
+      <div class="stat-sub">${s.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ─── FLEET TABLE ──────────────────────────────────────────────────────────────
+function renderTable() {
+  const table = document.getElementById('fleet-table');
+  const cols = ['Vehicle', 'Model', 'Driver', 'Distance', 'Trips', 'Run%', 'Idle%', 'Stop%', 'Avg Speed', 'Max Speed', 'Overspeed', 'Alerts', 'Work Days'];
+  const maxDist = Math.max(...vehicles.map(v => v.dist), 1);
+
+  table.innerHTML = `
+    <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>
+      ${vehicles.map(v => `
+        <tr onclick="selectVehicle(v_${v.id.replace(/\W/g,'_')}); switchTab('map', document.querySelector('.tab'))" style="cursor:pointer">
+          <td><span style="color:${v.color}">●</span> ${v.name}</td>
+          <td style="color:var(--muted)">${v.brand} ${v.model}</td>
+          <td style="color:var(--muted)">${v.driver}</td>
+          <td>
+            ${v.dist.toFixed(1)} km
+            <div style="margin-top:4px"><span class="mini-bar" style="width:${(v.dist/maxDist*60).toFixed(0)}px;background:${v.color}"></span></div>
+          </td>
+          <td>${v.trips}</td>
+          <td><span style="color:var(--green)">${v.runPct}%</span></td>
+          <td><span style="color:var(--yellow)">${v.idlePct}%</span></td>
+          <td><span style="color:var(--red)">${v.stopPct}%</span></td>
+          <td>${v.avgSpeed} km/h</td>
+          <td>${v.maxSpeed} km/h</td>
+          <td style="color:${v.overspeed > 0 ? 'var(--red)' : 'var(--muted)'}">${v.overspeed}</td>
+          <td style="color:${v.alerts > 0 ? 'var(--yellow)' : 'var(--muted)'}">${v.alerts}</td>
+          <td>${v.workDays}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+
+  // Expose vehicle refs for click
+  vehicles.forEach(v => {
+    window[`v_${v.id.replace(/\W/g,'_')}`] = v;
+  });
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => { if (t.textContent.toLowerCase().includes(tab)) t.classList.add('active'); });
+  document.getElementById('tab-map').style.display = tab === 'map' ? 'grid' : 'none';
+  document.getElementById('tab-table').style.display = tab === 'table' ? 'block' : 'none';
+  if (tab === 'map') setTimeout(() => map.invalidateSize(), 50);
+}
+
+// ─── MAIN ENTRY ───────────────────────────────────────────────────────────────
+async function processFiles(files) {
+  document.getElementById('loading').classList.add('show');
+  vehicles = [];
+
+  const csvFiles = Array.from(files).filter(f => f.name.endsWith('.csv'));
+  let colorIdx = 0;
+  let period = '';
+
+  for (const file of csvFiles) {
+    const text = await file.text();
+    const { rows, period: p, type } = parseCSV(text);
+    if (p) period = p;
+    if (!rows) continue;
+
+    rows.forEach(row => {
+      if (!row['Object'] && !row['object']) return;
+      const v = normalizeVehicle(row, type, COLORS[colorIdx % COLORS.length]);
+      // Avoid duplicates — merge by IMEI
+      const existing = vehicles.find(x => x.id === v.id);
+      if (existing) {
+        // Merge: prefer travel summary data (richer)
+        if (type === 'travel') Object.assign(existing, v);
+      } else {
+        vehicles.push(v);
+        colorIdx++;
+      }
+    });
+  }
+
+  document.getElementById('loading').classList.remove('show');
+
+  if (!vehicles.length) {
+    alert('No vehicle data found. Make sure you dropped a Trip Summary or Travel Summary CSV.');
+    return;
+  }
+
+  // Show dashboard
+  document.getElementById('drop-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('veh-count').textContent = vehicles.length;
+  document.getElementById('dash-period').textContent = period;
+  document.getElementById('header-meta').innerHTML = `${vehicles.length} vehicles &nbsp;|&nbsp; ${period}`;
+
+  renderStats();
+  renderVehicleList();
+  renderTable();
+
+  // Init map
+  setTimeout(() => {
+    initMap();
+    // Auto-select first vehicle
+    if (vehicles[0]) selectVehicle(vehicles[0]);
+  }, 100);
+}
+
+// ─── DROP ZONE ────────────────────────────────────────────────────────────────
+const dropArea = document.getElementById('drop-area');
+const fileInput = document.getElementById('file-input');
+
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+dropArea.addEventListener('drop', e => {
+  e.preventDefault();
+  dropArea.classList.remove('dragover');
+  processFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => processFiles(e.target.files));
+
+function resetApp() {
+  vehicles = [];
+  markers = { routes: [], starts: [], ends: [], anim: null };
+  routeCache = {};
+  selectedVehicle = null;
+  animState = { playing: false, progress: 0, animFrame: null, speed: 2 };
+  if (map) { map.remove(); map = null; }
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('drop-screen').style.display = 'flex';
+  document.getElementById('file-input').value = '';
+}
+
+// Leaflet tooltip dark style (inject after map loads)
+const style = document.createElement('style');
+style.textContent = `.leaflet-tooltip { background: #12151c; border: 1px solid #252a38; color: #e2e8f0; font-family: 'Space Mono', monospace; font-size: 11px; border-radius: 6px; padding: 6px 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+.leaflet-tooltip-top:before { border-top-color: #252a38; }`;
+document.head.appendChild(style);
+</script>
+</body>
+</html>
