@@ -835,15 +835,15 @@ body {
 <div id="upload-screen">
   <div class="upload-logo">LETSTACK &nbsp;/&nbsp; <strong>GPS TRACKER</strong></div>
   <div class="upload-box" id="upload-box">
-    <input type="file" id="file-input" accept=".xlsx,.xls" />
+    <input type="file" id="file-input" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv" />
     <div class="upload-icon">📡</div>
     <div class="upload-title">DROP TRACKING REPORT</div>
     <div class="upload-sub">
-      Upload a Letstack Device Tracking Report (.xlsx)<br>
-      or drag and drop here to begin analysis
+      Upload a Letstack Device Tracking Report<br>
+      XLSX, XLS, XLSM, ODS, CSV — drag and drop or click
     </div>
     <div class="upload-meta">
-      <span class="upload-tag blue">XLSX / XLS</span>
+      <span class="upload-tag blue">XLSX · XLS · XLSM · ODS · CSV</span>
       <span class="upload-tag green">LETSTACK FORMAT</span>
       <span class="upload-tag">GPS DATA</span>
       <span class="upload-tag">MULTI-DAY</span>
@@ -991,10 +991,7 @@ let pingIdx = {}; // ping index by DOM id
 // ════════════════════════════════════════════════════════════════
 // XLSX PARSER
 // ════════════════════════════════════════════════════════════════
-function parseXLSX(buffer) {
-  const wb = XLSX.read(buffer, { type: 'array' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+function parseRows(rows) {
 
   // Find header row
   let hIdx = -1;
@@ -1550,26 +1547,46 @@ function readFile(file) {
   prog.classList.add('show');
   prog.textContent = 'Reading file…';
 
+  const ext = file.name.split('.').pop().toLowerCase();
+  const isCSV = ext === 'csv';
+
   const reader = new FileReader();
+
   reader.onload = e => {
     try {
       prog.textContent = 'Parsing data…';
-      const { pings, summary } = parseXLSX(new Uint8Array(e.target.result));
-      if (!pings.length) throw new Error('No GPS data found in this file.');
+      let wb;
+      if (isCSV) {
+        // Parse CSV as text then hand to SheetJS
+        wb = XLSX.read(e.target.result, { type: 'string' });
+      } else {
+        // Handle all Excel binary formats: xlsx, xls, xlsm, xlsb, ods
+        wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      }
 
-      const devices = [...new Set(pings.map(p => p.device))];
-      const device = devices[0] || 'Unknown';
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const { pings, summary } = parseRows(rows);
+
+      if (!pings.length) throw new Error('No GPS data found. Make sure this is a Letstack Tracking Report.');
+
+      const devices = [...new Set(pings.map(p => p.device).filter(Boolean))];
+      const device = devices[0] || file.name.replace(/\.[^.]+$/, '');
       const dates = [...new Set(pings.map(p => p.date))].sort();
       const period = dates.length > 1 ? `${dates[0]} – ${dates[dates.length-1]}` : dates[0];
 
       processData(pings, summary, device, period);
     } catch (err) {
       prog.textContent = '⚠ ' + err.message;
-      setTimeout(() => prog.classList.remove('show'), 5000);
+      console.error(err);
+      setTimeout(() => prog.classList.remove('show'), 6000);
     }
   };
-  reader.onerror = () => { prog.textContent = '⚠ Failed to read file.'; };
-  reader.readAsArrayBuffer(file);
+
+  reader.onerror = () => { prog.textContent = '⚠ Could not read file.'; };
+
+  if (isCSV) reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
 }
 
 // ════════════════════════════════════════════════════════════════
